@@ -25,10 +25,10 @@ huggingface-cli login
 Then convert:
 ```bash
 # 3B model
-uv run python -m mlx_tada.convert_3b ./mlx_weights
+uv run python -m mlx_tada.convert_3b ./weights/3b
 
 # 1B model
-uv run python -m mlx_tada.convert_1b ./mlx_weights
+uv run python -m mlx_tada.convert_1b ./weights/1b
 ```
 
 ## Generate Speech
@@ -37,7 +37,7 @@ uv run python -m mlx_tada.convert_1b ./mlx_weights
 
 ```bash
 uv run python -m mlx_tada.generate \
-  --weights ./mlx_weights \
+  --weights ./weights/1b \
   --audio speaker.wav \
   --text "Hello world, today is a nice day." \
   --output output.wav
@@ -46,7 +46,7 @@ uv run python -m mlx_tada.generate \
 With 4-bit quantization (10x faster, 60% less memory):
 ```bash
 uv run python -m mlx_tada.generate \
-  --weights ./mlx_weights \
+  --weights ./weights/1b \
   --audio speaker.wav \
   --text "Hello world, today is a nice day." \
   --quantize 4 \
@@ -58,7 +58,7 @@ uv run python -m mlx_tada.generate \
 ```python
 from mlx_tada import TadaForCausalLM
 
-model = TadaForCausalLM.from_weights("./mlx_weights", quantize=4)
+model = TadaForCausalLM.from_weights("./weights/3b", quantize=4)
 ref = model.load_reference("speaker.wav")
 out = model.generate("Hello world, today is a nice day.", ref)
 
@@ -90,7 +90,7 @@ save_wav(out.audio, "output.wav")
 
 ```bash
 DEBUG=1 uv run python -m mlx_tada.generate \
-  --weights ./mlx_weights \
+  --weights ./weights/1b \
   --audio speaker.wav \
   --text "Hello"
 ```
@@ -104,5 +104,5 @@ setup_logging()
 ## Running Tests
 
 ```bash
-MLX_WEIGHTS=./mlx_weights uv run pytest tests/ -v
+MLX_WEIGHTS=./weights/1b uv run pytest tests/ -v
 ```
