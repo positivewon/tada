@@ -51,23 +51,26 @@ def normalize_text(text: str) -> str:
         lambda m: m.group(1) + m.group(2).upper(),
         text.lower(),
     )
+
     if text:
         text = text[0].upper() + text[1:]
+
     return text
 
 
 def gray_code_to_int(gray: mx.array) -> mx.array:
     binary = gray
     shift = 1
+
     while shift < 32:
         binary = mx.bitwise_xor(binary, mx.right_shift(binary, mx.array(shift)))
         shift <<= 1
+
     return binary
 
 
 def decode_gray_code_to_time(gray_bits: mx.array, num_bits: int) -> mx.array:
     bits_binary = mx.round((gray_bits + 1.0) / 2.0).astype(mx.int32)
-
     gray_int = mx.zeros(bits_binary.shape[:-1], dtype=mx.int32)
 
     for i in range(num_bits):

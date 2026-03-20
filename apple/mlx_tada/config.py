@@ -52,8 +52,10 @@ class TadaConfig:
     def from_dict(cls, d: dict) -> "TadaConfig":
         known = {field.name for field in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in d.items() if k in known}
+
         if "eos_token_id" in filtered and isinstance(filtered["eos_token_id"], int):
             filtered["eos_token_id"] = [filtered["eos_token_id"]]
+
         return cls(**filtered)
 
 
@@ -115,8 +117,10 @@ class Reference:
             "text": np.array([self.text]),
             "sample_rate": np.array([self.sample_rate]),
         }
+
         if self.token_masks is not None:
             data["token_masks"] = self.token_masks
+
         np.savez(path, **data)
 
     @classmethod
@@ -124,11 +128,15 @@ class Reference:
         """Load a previously saved reference from a .npz file."""
         data = np.load(path, allow_pickle=True)
         text = data["text"]
+
         if isinstance(text, np.ndarray):
             text = str(text.flat[0])
+
         sr = data.get("sample_rate", np.array([24000]))
+
         if isinstance(sr, np.ndarray):
             sr = int(sr.flat[0])
+
         return cls(
             token_values=data["token_values"],
             token_positions=data["token_positions"],

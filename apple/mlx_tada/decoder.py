@@ -125,8 +125,10 @@ class Decoder(nn.Module):
             parts.append(mx.expand_dims(encoded[pos], 0))
 
         n_trailing = int(time_before[-1].item())
+
         if n_trailing > 0:
             parts.append(mx.zeros((n_trailing, encoded.shape[-1])))
+
         expanded = mx.concatenate(parts, axis=0)
         expanded = mx.expand_dims(expanded, 0)
         token_masks = (mx.sqrt(mx.sum(expanded * expanded, axis=-1)) != 0).astype(mx.int32)

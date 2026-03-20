@@ -30,6 +30,7 @@ SAMPLE_STD = 0.5
 ACOUSTIC_MEAN = 0.0
 ACOUSTIC_STD = 1.5
 
+
 def create_segment_attention_mask(text_token_mask: mx.array) -> mx.array:
     block_ids = mx.cumsum(text_token_mask, axis=1)
     block_i = mx.expand_dims(block_ids, 2)
@@ -43,6 +44,7 @@ def create_segment_attention_mask(text_token_mask: mx.array) -> mx.array:
     can_attend = same_valid | (is_marked_i & prev_valid)
     return ~can_attend
 
+
 class Snake1d(nn.Module):
     def __init__(self, channels: int):
         super().__init__()
@@ -50,6 +52,7 @@ class Snake1d(nn.Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         return x + (1.0 / self.alpha) * mx.power(mx.sin(self.alpha * x), 2)
+
 
 class Conv1d(nn.Module):
     def __init__(
@@ -81,9 +84,12 @@ class Conv1d(nn.Module):
             dilation=self.dilation,
             groups=self.groups,
         )
+
         if self.bias is not None:
             y = y + self.bias
+
         return y
+
 
 class ConvTranspose1d(nn.Module):
     def __init__(
@@ -104,9 +110,12 @@ class ConvTranspose1d(nn.Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         y = mx.conv_transpose1d(x, self.weight, stride=self.stride, padding=self.padding)
+
         if self.bias is not None:
             y = y + self.bias
+
         return y
+
 
 class ResidualUnit(nn.Module):
     def __init__(self, dim: int = 16, dilation: int = 1):
@@ -120,10 +129,13 @@ class ResidualUnit(nn.Module):
     def __call__(self, x: mx.array) -> mx.array:
         y = self.conv2(self.snake2(self.conv1(self.snake1(x))))
         diff = x.shape[1] - y.shape[1]
+
         if diff > 0:
             half = diff // 2
             x = x[:, half : half + y.shape[1], :]
+
         return x + y
+
 
 class EncoderBlock(nn.Module):
     def __init__(self, dim: int = 16, stride: int = 1):
@@ -148,6 +160,7 @@ class EncoderBlock(nn.Module):
         x = self.conv(x)
         return x
 
+
 class WavEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -171,6 +184,7 @@ class WavEncoder(nn.Module):
         x = self.final_snake(x)
         x = self.final_conv(x)
         return x
+
 
 class LocalSelfAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int = 8, max_seq_len: int = 8192):
@@ -208,15 +222,19 @@ class LocalSelfAttention(nn.Module):
         k = self.apply_rope(k, S)
         scale = self.head_dim**-0.5
         attn = (q @ k.transpose(0, 1, 3, 2)) * scale
+
         if mask is not None:
             if mask.ndim == 2:
                 attn = attn + mx.expand_dims(mx.expand_dims(mx.where(mask, mx.array(-1e9), mx.array(0.0)), 0), 0)
+
             elif mask.ndim == 3:
                 attn = attn + mx.expand_dims(mx.where(mask, mx.array(-1e9), mx.array(0.0)), 1)
+
         attn = mx.softmax(attn, axis=-1)
         out = (attn @ v).transpose(0, 2, 1, 3).reshape(B, S, D)
         out = self.out_proj(out)
         return self.layer_norm(x + out)
+
 
 class LocalAttentionEncoderLayer(nn.Module):
     def __init__(self, d_model: int, num_heads: int = 8, d_ff: int = 4096):
@@ -231,6 +249,7 @@ class LocalAttentionEncoderLayer(nn.Module):
         ffn_out = self.linear2(nn.gelu(self.linear1(x)))
         return self.norm(x + ffn_out)
 
+
 class LocalAttentionEncoder(nn.Module):
     def __init__(self, d_model: int, num_layers: int = 4, num_heads: int = 8, d_ff: int = 4096):
         super().__init__()
@@ -240,7 +259,9 @@ class LocalAttentionEncoder(nn.Module):
     def __call__(self, x: mx.array, mask: mx.array | None = None) -> mx.array:
         for layer in self.layers:
             x = layer(x, mask)
+
         return self.final_norm(x)
+
 
 @dataclass
 class EncoderOutput:
@@ -252,6 +273,7 @@ class EncoderOutput:
     text_tokens: mx.array | None = None
     text_tokens_len: mx.array | None = None
     token_masks: mx.array | None = None
+
 
 class Encoder(nn.Module):
     def __init__(self):
@@ -272,10 +294,12 @@ class Encoder(nn.Module):
         enc_out = self.wav_encoder(x)
         seq_len = enc_out.shape[1]
         pad_len = seq_len - token_masks.shape[1]
+
         if pad_len > 0:
             padded_masks = mx.pad(token_masks, [(0, 0), (0, pad_len)])
         else:
             padded_masks = token_masks[:, :seq_len]
+
         enc_out = enc_out + self.pos_emb(padded_masks.astype(mx.int32))
         attn_mask = create_segment_attention_mask(padded_masks)
         enc_out = self.local_attention_encoder(enc_out, mask=attn_mask)
@@ -295,12 +319,14 @@ class Encoder(nn.Module):
     ) -> EncoderOutput:
         if audio_length is None:
             audio_length = mx.array([audio.shape[1]])
+
         enc_out, padded_masks = self.get_encoder_outputs(audio, token_masks)
         encoded_expanded = mx.where(
             mx.expand_dims(padded_masks, -1) == 0,
             mx.zeros_like(enc_out),
             enc_out,
         )
+
         if SAMPLE_STD > 0.0 and sample:
             noise = mx.random.normal(encoded_expanded.shape) * SAMPLE_STD
             encoded_expanded = mx.where(
@@ -308,6 +334,7 @@ class Encoder(nn.Module):
                 encoded_expanded,
                 encoded_expanded + noise,
             )
+
         positions_clamped = mx.clip(token_positions - 1, 0, encoded_expanded.shape[1] - 1)
         B, T = positions_clamped.shape
         batch_idx = mx.repeat(mx.arange(B).reshape(-1, 1), T, axis=1)

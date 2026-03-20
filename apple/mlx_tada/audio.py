@@ -28,6 +28,7 @@ __all__ = [
 def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
     if orig_sr == target_sr:
         return audio
+
     assert resample_poly is not None, "Resampling requires scipy: pip install scipy"
     gcd = math.gcd(orig_sr, target_sr)
     up = target_sr // gcd
@@ -38,8 +39,10 @@ def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarra
 def load_audio(audio_path: str, target_sr: int = 24000) -> tuple[np.ndarray, int]:
     assert sf_lib is not None, "Audio loading requires soundfile: pip install soundfile"
     audio, sr = sf_lib.read(audio_path, dtype="float32")
+
     if audio.ndim == 2:
         audio = audio.mean(axis=1)
+
     audio = resample_audio(audio, sr, target_sr)
     return audio, target_sr
 

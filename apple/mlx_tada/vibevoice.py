@@ -32,8 +32,10 @@ class TimestepEmbedder(nn.Module):
         freqs = mx.exp(-math.log(max_period) * mx.arange(half).astype(mx.float32) / half)
         args = mx.expand_dims(t.astype(mx.float32), 1) * mx.expand_dims(freqs, 0)
         embedding = mx.concatenate([mx.cos(args), mx.sin(args)], axis=-1)
+
         if dim % 2:
             embedding = mx.concatenate([embedding, mx.zeros_like(embedding[:, :1])], axis=-1)
+
         return embedding.astype(t.dtype)
 
     def __call__(self, t: mx.array) -> mx.array:
@@ -58,6 +60,7 @@ class RMSNorm(nn.Module):
         self.dim = dim
         self.eps = eps
         self.elementwise_affine = elementwise_affine
+
         if elementwise_affine:
             self.weight = mx.ones((dim,))
 
@@ -66,8 +69,10 @@ class RMSNorm(nn.Module):
         x_fp = x.astype(mx.float32)
         norm = x_fp * mx.rsqrt(mx.mean(x_fp * x_fp, axis=-1, keepdims=True) + self.eps)
         norm = norm.astype(dtype)
+
         if self.elementwise_affine:
             norm = norm * self.weight
+
         return norm
 
 
@@ -153,10 +158,13 @@ class VibeVoiceDiffusionHead(nn.Module):
     def scheduled_cfg(base_scale: float, t: float, schedule: str) -> float:
         if schedule == "constant" or base_scale == 1.0:
             return base_scale
+
         if schedule == "linear":
             return 1.0 + (base_scale - 1.0) * (1.0 - t)
+
         if schedule == "cosine":
             return 1.0 + (base_scale - 1.0) * 0.5 * (1.0 + math.cos(math.pi * t))
+
         return base_scale
 
     @staticmethod
@@ -164,12 +172,14 @@ class VibeVoiceDiffusionHead(nn.Module):
         if schedule == "cosine":
             linear_steps = mx.linspace(0, 1, num_steps + 1)
             return 0.5 * (1 - mx.cos(math.pi * linear_steps))
+
         if schedule == "logsnr":
             log_snr = mx.linspace(5.0, -5.0, num_steps + 1)
             t_span = mx.sigmoid(-log_snr / 2)
             t_span = t_span.at[0].add(-t_span[0])
             t_span = t_span.at[-1].add(1.0 - t_span[-1])
             return t_span
+
         return mx.linspace(0, 1, num_steps + 1)
 
     def compute_velocity(
@@ -184,6 +194,7 @@ class VibeVoiceDiffusionHead(nn.Module):
         bottleneck_fn=None,
     ) -> mx.array:
         apply_bn = bottleneck_fn or (lambda x: x)
+
         if acoustic_cfg != 1.0:
             speech_comb = mx.concatenate([speech, speech], axis=0)
             t_comb = mx.tile(t, (speech.shape[0] * 2,))
@@ -199,6 +210,7 @@ class VibeVoiceDiffusionHead(nn.Module):
                 vel_pos[..., acoustic_dim:] - vel_neg[..., acoustic_dim:]
             )
             return mx.concatenate([vel_acoustic, vel_time], axis=-1)
+
         cond_sq = mx.squeeze(cond, axis=1) if cond.ndim == 3 else cond
         return self(speech, mx.tile(t, (speech.shape[0],)), condition=apply_bn(cond_sq))
 

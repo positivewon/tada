@@ -48,6 +48,7 @@ def align_text_tokens(probs: np.ndarray, text_tokens: np.ndarray) -> list[int]:
             cum_max_idx = i
         F[i, 0] = cum_max_val
         backpointer[i, 0] = cum_max_idx
+
     if T <= L:
         cumsum = 0.0
 
@@ -58,6 +59,7 @@ def align_text_tokens(probs: np.ndarray, text_tokens: np.ndarray) -> list[int]:
 
     for i in range(1, L):
         max_j = min(i, T)
+
         if max_j <= 1:
             continue
 
@@ -74,6 +76,7 @@ def align_text_tokens(probs: np.ndarray, text_tokens: np.ndarray) -> list[int]:
     positions = [0] * T
     i, j = L - 1, T - 1
     pos_idx = T - 1
+
     while j >= 0:
         if j == 0:
             positions[pos_idx] = int(backpointer[i, j])
@@ -85,6 +88,7 @@ def align_text_tokens(probs: np.ndarray, text_tokens: np.ndarray) -> list[int]:
             pos_idx -= 1
             i -= 1
             j -= 1
+
     return positions
 
 
@@ -130,6 +134,7 @@ class Wav2Vec2FeatureExtractorLayer(nn.Module):
         x = self.conv(x)
         if self.is_first:
             x = self.layer_norm(x)
+
         x = nn.gelu(x)
         return x
 
@@ -201,8 +206,10 @@ class Wav2Vec2Attention(nn.Module):
         v = self.v_proj(x).reshape(B, L, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
         scale = self.head_dim**-0.5
         attn = (q @ k.transpose(0, 1, 3, 2)) * scale
+
         if mask is not None:
             attn = attn + mask
+
         attn = mx.softmax(attn, axis=-1)
         out = (attn @ v).transpose(0, 2, 1, 3).reshape(B, L, -1)
         return self.out_proj(out)
@@ -255,6 +262,7 @@ class Wav2Vec2Encoder(nn.Module):
 
         for layer in self.layers:
             x = layer(x, mask)
+
         return x
 
 
@@ -278,6 +286,7 @@ class Wav2Vec2ForCTC(nn.Module):
 
         for kernel_size, stride in zip(CONV_KERNEL, CONV_STRIDE):
             lengths = (lengths - kernel_size) // stride + 1
+
         return lengths
 
 

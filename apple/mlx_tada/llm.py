@@ -86,6 +86,7 @@ class KVCache:
         else:
             self.keys = keys
             self.values = values
+
         self.offset = self.keys.shape[2]
         return self.keys, self.values
 
@@ -127,15 +128,21 @@ class Attention(nn.Module):
         v = self.v_proj(x).reshape(B, L, self.num_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
+
         if cache is not None:
             k, v = cache.update(k, v)
+
         n_rep = self.num_heads // self.num_kv_heads
+
         if n_rep > 1:
             k = mx.repeat(k, n_rep, axis=1)
             v = mx.repeat(v, n_rep, axis=1)
+
         attn = (q @ k.transpose(0, 1, 3, 2)) * self.scale
+
         if mask is not None:
             attn = attn + mask
+
         attn = mx.softmax(attn, axis=-1)
         out = (attn @ v).transpose(0, 2, 1, 3).reshape(B, L, -1)
         return self.o_proj(out)

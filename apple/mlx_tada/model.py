@@ -113,15 +113,19 @@ class TadaForCausalLM(nn.Module):
         self.num_time_bits = math.ceil(math.log2(config.num_time_classes))
         self.time_dim = 2 * self.num_time_bits
         self.model = LlamaModel(config)
+
         if not config.tie_word_embeddings:
             self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+
         self.acoustic_proj = nn.Linear(config.acoustic_dim, config.hidden_size)
         self.time_start_embed = nn.Embedding(config.num_time_classes, config.hidden_size)
         self.time_end_embed = nn.Embedding(config.num_time_classes, config.hidden_size)
         self.acoustic_mask_emb = nn.Embedding(2, config.hidden_size)
         self.has_bottleneck = config.bottleneck_dim is not None
+
         if self.has_bottleneck:
             self.bottleneck_proj = nn.Linear(config.hidden_size, config.bottleneck_dim)
+
         head_hidden = config.bottleneck_dim if config.bottleneck_dim else config.hidden_size
         latent_size = config.acoustic_dim + self.time_dim
         self.prediction_head = VibeVoiceDiffusionHead(
@@ -140,6 +144,7 @@ class TadaForCausalLM(nn.Module):
     def ensure_rope(self, seq_len: int) -> None:
         if seq_len <= self._rope_len:
             return
+
         new_len = max(seq_len, 4096)
         self._rope_cos, self._rope_sin = build_rope_cache(
             new_len, self.config.head_dim, self.config.rope_theta, self.config.rope_scaling
@@ -153,11 +158,13 @@ class TadaForCausalLM(nn.Module):
     def lm_head_forward(self, h: mx.array) -> mx.array:
         if self.config.tie_word_embeddings:
             return h @ self.model.embed_tokens.weight.T
+
         return self.lm_head(h)
 
     def apply_bottleneck(self, h: mx.array) -> mx.array:
         if self.has_bottleneck:
             return self.bottleneck_proj(h)
+
         return h
 
     def forward_one_step(
@@ -179,6 +186,7 @@ class TadaForCausalLM(nn.Module):
         cache_len = cache[0].seq_len if cache and cache[0].keys is not None else 0
         seq_len = inputs_embeds.shape[1]
         cos, sin = self.get_rope_slice(cache_len, seq_len)
+
         if seq_len > 1:
             total = cache_len + seq_len
             row_idx = mx.arange(seq_len).reshape(-1, 1) + cache_len
@@ -187,6 +195,7 @@ class TadaForCausalLM(nn.Module):
             mask = mx.expand_dims(mx.expand_dims(mask, 0), 0)
         else:
             mask = None
+
         hidden = self.model(inputs_embeds, cos, sin, mask, cache)
         logits = self.lm_head_forward(hidden)
         return hidden, logits
@@ -227,6 +236,7 @@ class TadaForCausalLM(nn.Module):
         pad_token_id: int,
     ) -> mx.array:
         logits = logits.at[:, pad_token_id].add(mx.array(-1e9))
+
         if opts.text_do_sample:
             if opts.text_repetition_penalty != 1.0:
                 penalty = opts.text_repetition_penalty
@@ -239,10 +249,12 @@ class TadaForCausalLM(nn.Module):
                         logits = logits.at[batch_idx, tid].add(penalised[batch_idx, j] - prev_scores[batch_idx, j])
 
             logits = logits / opts.text_temperature
+
             if opts.text_top_k > 0:
                 top_k = min(opts.text_top_k, logits.shape[-1])
                 kth = mx.sort(logits, axis=-1)[..., -top_k : -top_k + 1]
                 logits = mx.where(logits < kth, mx.array(-1e9), logits)
+
             if 0.0 < opts.text_top_p < 1.0:
                 sorted_idx = mx.argsort(logits, axis=-1)[:, ::-1]
                 sorted_logits = mx.take_along_axis(logits, sorted_idx, axis=1)
@@ -251,6 +263,7 @@ class TadaForCausalLM(nn.Module):
                 sorted_logits = mx.where(probs_to_remove, mx.array(-1e9), sorted_logits)
                 unsorted_idx = mx.argsort(sorted_idx, axis=-1)
                 logits = mx.take_along_axis(sorted_logits, unsorted_idx, axis=1)
+
             probs = mx.softmax(logits, axis=-1)
             next_token = mx.random.categorical(mx.log(probs + 1e-12))
             return mx.expand_dims(next_token, -1)
@@ -278,13 +291,16 @@ class TadaForCausalLM(nn.Module):
         weights_dir = Path(weights_dir)
         model_dir = weights_dir / "model"
         config_path = model_dir / "config.json"
+
         if config_path.exists():
             with open(config_path) as f:
                 config = TadaConfig.from_dict(json.load(f))
         else:
             config = TadaConfig()
+
         model = cls(config)
         load_weights(model, model_dir / "weights.safetensors")
+
         if quantize is not None:
             nn.quantize(
                 model.model,
@@ -361,11 +377,13 @@ class TadaForCausalLM(nn.Module):
         pam = mx.pad(pam, [(0, 0), (prefix_len, 0)])
         tlb = mx.pad(tlb, [(0, 0), (prefix_len, 0)])
         tla = mx.pad(tla, [(0, 0), (prefix_len, 0)])
+
         if num_transition_steps > 0:
             paf = paf[:, :-num_transition_steps, :]
             pam = pam[:, :-num_transition_steps]
             tlb = tlb[:, :-num_transition_steps]
             tla = tla[:, :-num_transition_steps]
+
         pam = mx.concatenate([pam[:, 1:], mx.ones_like(pam[:, :1])], axis=1)
         input_ids = mx.array([prefill_token_ids + target_token_ids + [eot_id] * shift], dtype=mx.int32)
         prompt_token_len = paf.shape[1]
@@ -384,9 +402,11 @@ class TadaForCausalLM(nn.Module):
         n_frames_cap = max(0, tlb.shape[1] - 2)
         n_prefill = min(n_ac, n_t, n_frames_cap) if (n_ac > 0 and n_t > 0) else 0
         prefill_len = min(len(prefill_token_ids), shift + n_prefill + 1) if n_prefill > 0 else 0
+
         if log.isEnabledFor(logging.DEBUG):
             log.debug(f"after masking={self._tokenizer.decode(np.array(input_ids[0]).tolist())}")
             log.debug(f"prefill_len={prefill_len}, prompt_frames={paf.shape[1]}")
+
         return input_ids, paf, pam, tlb, tla, prefill_len
 
     def _prefill(
@@ -499,6 +519,7 @@ class TadaForCausalLM(nn.Module):
             pred_ta = mx.expand_dims(
                 decode_gray_code_to_time(time_gray[..., self.num_time_bits :], self.num_time_bits), 0
             )
+
             if step >= input_ids.shape[1] - 1:
                 next_token = self.sample_token(logits[:, -1, :], input_ids, opts, pad_id)
                 input_ids = mx.concatenate([input_ids, next_token.astype(mx.int32)], axis=1)
@@ -507,6 +528,7 @@ class TadaForCausalLM(nn.Module):
                     break
             else:
                 all_token_ids.append(input_ids[:, step + 1 : step + 2])
+
             if step >= shift:
                 if step - shift < paf.shape[1]:
                     acoustic_features_val = mx.expand_dims(paf[:, step - shift], 1)
@@ -523,7 +545,9 @@ class TadaForCausalLM(nn.Module):
                     time_after_val = pred_ta
                 all_time_before.append(time_before_val)
                 last_time_before = time_before_val
+
             mx.eval(input_ids, acoustic_features_val, time_before_val)
+
             if log.isEnabledFor(logging.INFO):
                 tok_str = self._tokenizer.decode([input_ids[0, -1].item()])
                 log.info(f"step {step}: {tok_str!r}  ({(time.time() - t0) * 1000:.0f}ms)")
@@ -560,8 +584,10 @@ class TadaForCausalLM(nn.Module):
         wav = self._decoder.decode_frames(encoded[0], time_before_out[0])
         lead_frames = int(time_before_out[0, 0].item())
         lead_samples = int(24000 * lead_frames / 50)
+
         if lead_samples > 0 and lead_samples < wav.shape[0]:
             wav = wav[lead_samples:]
+
         return wav
 
     def generate(

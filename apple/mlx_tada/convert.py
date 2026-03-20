@@ -42,10 +42,12 @@ def save_as_bfloat16(state: dict[str, np.ndarray], path: str) -> None:
 def load_safetensors(path: str | Path) -> dict[str, np.ndarray]:
     assert torch is not None, "Weight conversion requires PyTorch. Install with: pip install torch"
     path = Path(path)
+
     if path.is_file():
         files = [path]
     else:
         files = sorted(path.glob("*.safetensors"))
+
     tensors: dict[str, np.ndarray] = {}
 
     for weight_file in files:
@@ -55,6 +57,7 @@ def load_safetensors(path: str | Path) -> dict[str, np.ndarray]:
                 if t.dtype == torch.bfloat16:
                     t = t.float()
                 tensors[key] = t.numpy()
+
     return tensors
 
 
@@ -70,17 +73,19 @@ def fold_weight_norm(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     for prefix in wn_prefixes:
         g_key = f"{prefix}.parametrizations.weight.original0"
         v_key = f"{prefix}.parametrizations.weight.original1"
+
         if g_key not in state or v_key not in state:
             continue
+
         gain = state.pop(g_key)
         direction = state.pop(v_key)
-
         axes = tuple(i for i in range(direction.ndim) if gain.shape[i] == 1 or i >= gain.ndim)
+
         if not axes:
             axes = tuple(range(1, direction.ndim))
+
         norm = np.sqrt(np.sum(direction**2, axis=axes, keepdims=True) + 1e-12)
         weight = gain * direction / norm
-
         state[f"{prefix}.weight"] = weight
 
     return state
@@ -90,6 +95,7 @@ def transpose_snake_alpha(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]
     for key in list(state.keys()):
         if key.endswith(".alpha") and state[key].ndim == 3:
             state[key] = np.transpose(state[key], (0, 2, 1))
+
     return state
 
 
@@ -97,6 +103,7 @@ def transpose_conv_weights(state: dict[str, np.ndarray], conv_keys: set[str]) ->
     for key in conv_keys:
         if key in state and state[key].ndim == 3:
             state[key] = np.swapaxes(state[key], 1, 2)
+
     return state
 
 
@@ -110,6 +117,7 @@ def rename_adaln_keys(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     for old, new in renames.items():
         state[new] = state.pop(old)
+
     return state
 
 
@@ -127,6 +135,7 @@ def rename_timestep_embedder_keys(
 
     for old, new in renames.items():
         state[new] = state.pop(old)
+
     return state
 
 
@@ -139,6 +148,7 @@ def collect_encoder_conv_keys(state: dict[str, np.ndarray]) -> set[str]:
         if state[key].ndim != 3:
             continue
         conv_keys.add(key)
+
     return conv_keys
 
 
@@ -148,7 +158,6 @@ def rename_encoder_keys(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     for key in list(state.keys()):
         new_key = key
-
         new_key = re.sub(r"^wav_encoder\.block\.0\.", "wav_encoder.initial_conv.", new_key)
 
         for i in range(num_encoder_blocks):
@@ -257,6 +266,7 @@ def transpose_conv_transpose_weights(
         if "conv_transpose." in key and key.endswith(".weight") and state[key].ndim == 3:
             conv_weight = state[key]
             state[key] = np.transpose(conv_weight, (1, 2, 0))
+
     return state
 
 
@@ -265,6 +275,7 @@ def remove_rope_keys(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     for k in to_remove:
         del state[k]
+
     return state
 
 
@@ -273,6 +284,7 @@ def remove_encoder_buffers(state: dict[str, np.ndarray]) -> dict[str, np.ndarray
 
     for k in to_remove:
         del state[k]
+
     return state
 
 
@@ -289,6 +301,7 @@ def handle_encoder_rope(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     for k in removes:
         del state[k]
+
     return state
 
 
@@ -299,9 +312,7 @@ def convert_tada_model(
 ) -> None:
     print(f"Loading TadaForCausalLM weights from {model_path}")
     state = load_safetensors(model_path)
-
     print(f"  {len(state)} tensors loaded")
-
     decoder_keys = [k for k in state if k.startswith("_decoder.") or k.startswith("decoder.")]
 
     for k in decoder_keys:
@@ -317,12 +328,12 @@ def convert_tada_model(
 
     out_dir = Path(output_path) / "model"
     out_dir.mkdir(parents=True, exist_ok=True)
-
     save_as_bfloat16(state, str(out_dir / "weights.safetensors"))
     print(f"  Saved {len(state)} tensors to {out_dir / 'weights.safetensors'}")
 
     if config_path:
         shutil.copy(config_path, out_dir / "config.json")
+
     print(f"  Model conversion complete -> {out_dir}")
 
 
@@ -335,19 +346,15 @@ def convert_encoder(
     print(f"Loading Encoder weights from {enc_path}")
     state = load_safetensors(enc_path)
     print(f"  {len(state)} tensors loaded")
-
     state = fold_weight_norm(state)
     state = remove_encoder_buffers(state)
     state = handle_encoder_rope(state)
     state = rename_encoder_keys(state)
-
     conv_keys = collect_encoder_conv_keys(state)
     state = transpose_conv_weights(state, conv_keys)
     state = transpose_snake_alpha(state)
-
     out_dir = Path(output_path) / "encoder"
     out_dir.mkdir(parents=True, exist_ok=True)
-
     save_as_bfloat16(state, str(out_dir / "weights.safetensors"))
     print(f"  Saved {len(state)} tensors to {out_dir / 'weights.safetensors'}")
     print(f"  Encoder conversion complete -> {out_dir}")
@@ -362,14 +369,11 @@ def convert_decoder(
     print(f"Loading Decoder weights from {dec_path}")
     state = load_safetensors(dec_path)
     print(f"  {len(state)} tensors loaded")
-
     state = fold_weight_norm(state)
     state = remove_encoder_buffers(state)
     state = handle_encoder_rope(state)
     state = rename_decoder_keys(state)
-
     state = transpose_conv_transpose_weights(state)
-
     conv_keys = set()
 
     for key in state:
@@ -378,10 +382,8 @@ def convert_decoder(
 
     state = transpose_conv_weights(state, conv_keys)
     state = transpose_snake_alpha(state)
-
     out_dir = Path(output_path) / "decoder"
     out_dir.mkdir(parents=True, exist_ok=True)
-
     save_as_bfloat16(state, str(out_dir / "weights.safetensors"))
     print(f"  Saved {len(state)} tensors to {out_dir / 'weights.safetensors'}")
     print(f"  Decoder conversion complete -> {out_dir}")
@@ -399,6 +401,7 @@ def rename_aligner_keys(state: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     for old, new in renames.items():
         state[new] = state.pop(old)
+
     return state
 
 
@@ -413,6 +416,7 @@ def collect_aligner_conv_keys(state: dict[str, np.ndarray]) -> set[str]:
         if "pos_conv_embed" in key:
             continue
         conv_keys.add(key)
+
     return conv_keys
 
 
@@ -425,28 +429,26 @@ def convert_aligner(
     print(f"Loading Aligner weights from {aligner_path}")
     state = load_safetensors(aligner_path)
     print(f"  {len(state)} tensors loaded")
-
     to_remove = [k for k in state if "masked_spec_embed" in k]
 
     for k in to_remove:
         del state[k]
+
     if to_remove:
         print(f"  Removed {len(to_remove)} unused keys (masked_spec_embed)")
 
     state = fold_weight_norm(state)
     state = rename_aligner_keys(state)
-
     conv_keys = collect_aligner_conv_keys(state)
     state = transpose_conv_weights(state, conv_keys)
-
     pos_conv_key = "wav2vec2.encoder.pos_conv_embed.conv.weight"
+
     if pos_conv_key in state and state[pos_conv_key].ndim == 3:
         pos_conv_weight = state[pos_conv_key]
         state[pos_conv_key] = np.swapaxes(pos_conv_weight, 1, 2)
 
     out_dir = Path(output_path) / "aligner"
     out_dir.mkdir(parents=True, exist_ok=True)
-
     save_as_bfloat16(state, str(out_dir / "weights.safetensors"))
     print(f"  Saved {len(state)} tensors to {out_dir / 'weights.safetensors'}")
     print(f"  Aligner conversion complete -> {out_dir}")
@@ -465,16 +467,21 @@ def download_from_hf(repo_id: str, subfolder: str | None = None, local_dir: str 
     )
     if subfolder:
         return Path(path) / subfolder
+
     return Path(path)
 
 
 def resolve_hf(repo_or_path: str, output: Path, cache_name: str) -> str:
     local_path = Path(repo_or_path)
+
     if local_path.exists():
         return str(local_path)
+
     cached = output / "hf_cache" / cache_name
+
     if cached.exists():
         return str(cached)
+
     print(f"Downloading {repo_or_path} from HuggingFace...")
     return str(download_from_hf(repo_or_path, local_dir=str(cached)))
 
