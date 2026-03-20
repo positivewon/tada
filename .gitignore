@@ -1,4 +1,6 @@
 weights/
+mlx_weights/
+mlx_weights_*/
 
 __pycache__/
 .pytest_cache/
@@ -8,3 +10,6 @@ __pycache__/
 dist/
 build/
 PYPI_README.md
+
+*.wav
+*.npz
