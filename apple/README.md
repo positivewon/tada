@@ -19,13 +19,18 @@ uv pip install mlx-whisper
 
 ## Weights
 
+Download a reference audio clip:
+```bash
+curl -O "https://storage.googleapis.com/hume_reference_speakers/ljspeech.wav"
+```
+
 Pre-converted weights are downloaded and cached automatically. You still need [gated access to Llama 3.2](https://huggingface.co/meta-llama/Llama-3.2-1B) for the tokenizer:
 
 ```python
 from mlx_tada import TadaForCausalLM, save_wav
 
 model = TadaForCausalLM.from_pretrained("HumeAI/mlx-tada-3b", quantize=4)
-ref = model.load_reference("speaker.wav")
+ref = model.load_reference("ljspeech.wav")
 out = model.generate("Hello, this is a test of TADA speech synthesis.", ref)
 save_wav(out.audio, "output.wav")
 ```
@@ -54,7 +59,7 @@ model = TadaForCausalLM.from_weights("./weights/3b", quantize=4)
 ```bash
 uv run python -m mlx_tada.generate \
   --weights ./weights/3b \
-  --audio speaker.wav \
+  --audio ljspeech.wav \
   --text "The history of artificial intelligence is a fascinating journey that spans decades of research and innovation. It all began in the 1950s when pioneers like Alan Turing first posed the question of whether machines could think." \
   --output output.wav
 ```
@@ -63,7 +68,7 @@ With 4-bit quantization (10x faster, 60% less memory):
 ```bash
 uv run python -m mlx_tada.generate \
   --weights ./weights/3b \
-  --audio speaker.wav \
+  --audio ljspeech.wav \
   --text "The history of artificial intelligence is a fascinating journey that spans decades of research and innovation. It all began in the 1950s when pioneers like Alan Turing first posed the question of whether machines could think." \
   --quantize 4 \
   --output output.wav
@@ -75,7 +80,7 @@ uv run python -m mlx_tada.generate \
 from mlx_tada import TadaForCausalLM, save_wav
 
 model = TadaForCausalLM.from_pretrained("HumeAI/mlx-tada-3b", quantize=4)
-ref = model.load_reference("speaker.wav")
+ref = model.load_reference("ljspeech.wav")
 out = model.generate("The history of artificial intelligence is a fascinating journey that spans decades of research and innovation. It all began in the 1950s when pioneers like Alan Turing first posed the question of whether machines could think.", ref)
 save_wav(out.audio, "output.wav")
 
@@ -93,7 +98,7 @@ Control generation behavior with `InferenceOptions`:
 from mlx_tada import TadaForCausalLM, InferenceOptions, save_wav
 
 model = TadaForCausalLM.from_weights("./weights/3b", quantize=4)
-ref = model.load_reference("speaker.wav")
+ref = model.load_reference("ljspeech.wav")
 
 opts = InferenceOptions(
     acoustic_cfg_scale=1.6,
@@ -123,7 +128,7 @@ Use `num_extra_steps` to let the model generate speech beyond the provided text.
 from mlx_tada import TadaForCausalLM, InferenceOptions, save_wav
 
 model = TadaForCausalLM.from_weights("./weights/3b", quantize=4)
-ref = model.load_reference("speaker.wav")
+ref = model.load_reference("ljspeech.wav")
 
 opts = InferenceOptions(
     acoustic_cfg_scale=1.6,
@@ -145,7 +150,7 @@ save_wav(out.audio, "output.wav")
 ```python
 from mlx_tada import Reference
 
-ref = model.load_reference("speaker.wav")
+ref = model.load_reference("ljspeech.wav")
 ref.save("speaker.npz")
 
 ref = Reference.load("speaker.npz")
@@ -164,7 +169,7 @@ save_wav(out.audio, "output.wav")
 ```bash
 DEBUG=1 uv run python -m mlx_tada.generate \
   --weights ./weights/3b \
-  --audio speaker.wav \
+  --audio ljspeech.wav \
   --text "Hello"
 ```
 
