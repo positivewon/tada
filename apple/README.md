@@ -2,12 +2,14 @@
 
 TADA speech synthesis on Apple Silicon via [MLX](https://github.com/ml-explore/mlx).
 
+Also available on PyPI: `pip install mlx-tada`
+
 ## Setup
 
 ```bash
 cd apple
 uv venv
-uv pip install -e ".[convert]"
+uv pip install -e .
 ```
 
 For auto-transcription of reference audio (optional):

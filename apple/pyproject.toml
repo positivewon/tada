@@ -5,10 +5,24 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mlx-tada"
 version = "0.1.0"
-description = "Text-Acoustic Dual-Aligned Language Model for MLX"
+description = "TADA speech synthesis on Apple Silicon via MLX"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+keywords = ["mlx", "tts", "speech-synthesis", "apple-silicon", "tada"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "mlx>=0.30.0",
     "numpy>=1.24.0",
@@ -24,6 +38,11 @@ convert = [
     "torch>=2.0.0",
     "huggingface-hub>=0.20.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HumeAI/tada"
+Repository = "https://github.com/HumeAI/tada"
+Documentation = "https://github.com/HumeAI/tada/tree/main/apple"
 
 [tool.setuptools.packages.find]
 include = ["mlx_tada*"]
