@@ -21,7 +21,7 @@ uv pip install mlx-whisper
 
 ### Option A: Pre-converted weights from Hugging Face (recommended)
 
-No gated model access required. Weights are downloaded and cached automatically:
+Pre-converted weights are downloaded and cached automatically. You still need [gated access to Llama 3.2](https://huggingface.co/meta-llama/Llama-3.2-1B) for the tokenizer:
 
 ```python
 from mlx_tada import TadaForCausalLM, save_wav
